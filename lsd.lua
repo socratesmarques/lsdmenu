@@ -71,7 +71,7 @@ make("UICorner", {CornerRadius = UDim.new(0, 12)}, window)
 local border = make("UIStroke", {Color = accent, Thickness = 2}, window)
 
 local title = make("TextLabel", {
-	Size = UDim2.new(1, -52, 0, 44),
+	Size = UDim2.new(1, -94, 0, 44),
 	Position = UDim2.fromOffset(14, 0),
 	BackgroundTransparency = 1,
 	Text = "lsd",
@@ -102,6 +102,17 @@ closeButton.Size = UDim2.fromOffset(34, 34)
 closeButton.Position = UDim2.new(1, -41, 0, 5)
 closeButton.TextSize = 22
 
+local minimizeButton = createButton(window, "−")
+minimizeButton.Size = UDim2.fromOffset(34, 34)
+minimizeButton.Position = UDim2.new(1, -81, 0, 5)
+minimizeButton.TextSize = 22
+
+local reopenButton = createButton(gui, "lsd")
+reopenButton.Name = "ReopenMenu"
+reopenButton.Size = UDim2.fromOffset(60, 42)
+reopenButton.Position = UDim2.new(0, 12, 0.5, -21)
+reopenButton.Visible = false
+
 local tabBar = make("Frame", {
 	Position = UDim2.fromOffset(12, 49),
 	Size = UDim2.new(1, -24, 0, 36),
@@ -116,6 +127,7 @@ local cancelBindCapture = function() end
 local function updateTheme()
 	border.Color = accent
 	title.TextColor3 = accent
+	reopenButton.BackgroundColor3 = accent
 	for index, button in ipairs(tabButtons) do
 		button.BackgroundColor3 = index == selectedTab and accent or inactive
 		pages[index].Visible = index == selectedTab
@@ -255,6 +267,16 @@ applyBindButton.LayoutOrder = -1
 updateTheme()
 
 local dragInput, dragOrigin, windowOrigin
+connect(minimizeButton.Activated, function()
+	cancelBindCapture()
+	dragInput = nil
+	window.Visible = false
+	reopenButton.Visible = true
+end)
+connect(reopenButton.Activated, function()
+	window.Visible = true
+	reopenButton.Visible = false
+end)
 connect(title.InputBegan, function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		dragInput, dragOrigin, windowOrigin = input, input.Position, window.Position
