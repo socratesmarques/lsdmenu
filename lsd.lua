@@ -32,6 +32,8 @@ end
 local connections, humanoids, visuals = {}, {}, {}
 local alive = true
 local state = {aim = false, mobileAim = false, chams = false, boxes = false, holding = false}
+local aimKey = Enum.KeyCode.E
+local waitingForBind = false
 local accent = Color3.fromRGB(170, 85, 255)
 local inactive = Color3.fromRGB(39, 39, 49)
 
@@ -128,10 +130,15 @@ for index, name in ipairs({"Mira", "Visual", "Configurações"}) do
 	button.Size = UDim2.new(1 / 3, -4, 1, 0)
 	tabButtons[index] = button
 
-	local page = make("Frame", {
+	local page = make("ScrollingFrame", {
 		Position = UDim2.fromOffset(14, 99),
 		Size = UDim2.new(1, -28, 1, -113),
 		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 3,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.fromOffset(0, 0),
 		Visible = index == 1,
 	}, window)
 	make("UIListLayout", {Padding = UDim.new(0, 9)}, page)
@@ -158,7 +165,7 @@ createToggle(pages[1], "Mira fixa (celular)", "mobileAim")
 make("TextLabel", {
 	Size = UDim2.new(1, 0, 0, 62),
 	BackgroundTransparency = 1,
-	Text = "PC: segure E. Celular: ative Mira fixa.\nAlvo visível mais próximo do centro da tela.",
+	Text = "PC: segure a tecla escolhida. Celular: ative Mira fixa.\nAlvo visível mais próximo do centro da tela.",
 	TextColor3 = Color3.fromRGB(185, 185, 195),
 	TextSize = 12,
 	TextWrapped = true,
@@ -167,6 +174,14 @@ make("TextLabel", {
 
 createToggle(pages[2], "Chams", "chams")
 createToggle(pages[2], "Box", "boxes")
+
+local bindButton = createButton(pages[3], "Bind da mira: " .. aimKey.Name)
+connect(bindButton.Activated, function()
+	waitingForBind = true
+	state.holding = false
+	bindButton.Text = "Pressione uma tecla..."
+	bindButton.BackgroundColor3 = accent
+end)
 
 for _, entry in ipairs({
 	{"Roxo", Color3.fromRGB(170, 85, 255)},
@@ -199,10 +214,19 @@ connect(UIS.InputChanged, function(input)
 end)
 connect(UIS.InputEnded, function(input)
 	if input == dragInput or input.UserInputType == Enum.UserInputType.MouseButton1 then dragInput = nil end
-	if input.KeyCode == Enum.KeyCode.E then state.holding = false end
+	if input.KeyCode == aimKey then state.holding = false end
 end)
 connect(UIS.InputBegan, function(input, processed)
-	if not processed and input.KeyCode == Enum.KeyCode.E then state.holding = true end
+	if waitingForBind and input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode ~= Enum.KeyCode.Unknown then
+		aimKey = input.KeyCode
+		waitingForBind = false
+		state.holding = false
+		bindButton.Text = "Bind da mira: " .. aimKey.Name
+		bindButton.BackgroundColor3 = inactive
+		updateTheme()
+		return
+	end
+	if not processed and input.KeyCode == aimKey then state.holding = true end
 end)
 connect(UIS.WindowFocusReleased, function()
 	state.holding, dragInput = false, nil
