@@ -111,6 +111,7 @@ make("UIListLayout", {FillDirection = Enum.FillDirection.Horizontal, Padding = U
 
 local pages, tabButtons, toggleButtons = {}, {}, {}
 local selectedTab = 1
+local cancelBindCapture = function() end
 
 local function updateTheme()
 	border.Color = accent
@@ -141,10 +142,11 @@ for index, name in ipairs({"Mira", "Visual", "Configurações"}) do
 		CanvasSize = UDim2.fromOffset(0, 0),
 		Visible = index == 1,
 	}, window)
-	make("UIListLayout", {Padding = UDim.new(0, 9)}, page)
+	make("UIListLayout", {Padding = UDim.new(0, 9), SortOrder = Enum.SortOrder.LayoutOrder}, page)
 	pages[index] = page
 
 	connect(button.Activated, function()
+		cancelBindCapture()
 		selectedTab = tabIndex
 		updateTheme()
 	end)
@@ -175,13 +177,59 @@ make("TextLabel", {
 createToggle(pages[2], "Chams", "chams")
 createToggle(pages[2], "Box", "boxes")
 
-local bindButton = createButton(pages[3], "Bind da mira: " .. aimKey.Name)
+local bindButton = createButton(pages[1], "Bind da mira: " .. aimKey.Name .. " (alterar)")
+local bindInput = make("TextBox", {
+	Size = UDim2.new(1, 0, 0, 38),
+	BackgroundColor3 = inactive,
+	BorderSizePixel = 0,
+	Text = aimKey.Name,
+	PlaceholderText = "Nome da tecla: Q, E, LeftShift...",
+	ClearTextOnFocus = false,
+	TextColor3 = Color3.fromRGB(245, 245, 250),
+	TextSize = 14,
+	Font = Enum.Font.Gotham,
+}, pages[1])
+make("UICorner", {CornerRadius = UDim.new(0, 7)}, bindInput)
+local applyBindButton = createButton(pages[1], "Aplicar tecla digitada")
+
+cancelBindCapture = function()
+	waitingForBind = false
+	state.holding = false
+	bindButton.Text = "Bind da mira: " .. aimKey.Name .. " (alterar)"
+	bindButton.BackgroundColor3 = inactive
+end
+
+local function setAimKey(key)
+	aimKey = key
+	cancelBindCapture()
+	bindInput.Text = key.Name
+	applyBindButton.Text = "Aplicar tecla digitada"
+end
+
+local function applyTypedBind()
+	local name = bindInput.Text:match("^%s*(.-)%s*$"):lower()
+	for _, key in ipairs(Enum.KeyCode:GetEnumItems()) do
+		if key.Name:lower() == name and key.Value > 0 and key.Value < 1000
+			and key ~= Enum.KeyCode.Escape then
+			setAimKey(key)
+			return
+		end
+	end
+	applyBindButton.Text = "Tecla inválida. Ex.: Q, E, LeftShift"
+end
+
 connect(bindButton.Activated, function()
+	if waitingForBind then cancelBindCapture() return end
 	waitingForBind = true
 	state.holding = false
-	bindButton.Text = "Pressione uma tecla..."
+	bindButton.Text = "Pressione uma tecla (Esc cancela)"
 	bindButton.BackgroundColor3 = accent
 end)
+connect(bindInput.Focused, cancelBindCapture)
+connect(bindInput.FocusLost, function(enterPressed)
+	if enterPressed then applyTypedBind() end
+end)
+connect(applyBindButton.Activated, applyTypedBind)
 
 for _, entry in ipairs({
 	{"Roxo", Color3.fromRGB(170, 85, 255)},
@@ -196,6 +244,14 @@ for _, entry in ipairs({
 		updateTheme()
 	end)
 end
+for _, page in ipairs(pages) do
+	for index, child in ipairs(page:GetChildren()) do
+		if child:IsA("GuiObject") then child.LayoutOrder = index end
+	end
+end
+bindButton.LayoutOrder = -3
+bindInput.LayoutOrder = -2
+applyBindButton.LayoutOrder = -1
 updateTheme()
 
 local dragInput, dragOrigin, windowOrigin
@@ -217,18 +273,21 @@ connect(UIS.InputEnded, function(input)
 	if input.KeyCode == aimKey then state.holding = false end
 end)
 connect(UIS.InputBegan, function(input, processed)
-	if waitingForBind and input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode ~= Enum.KeyCode.Unknown then
-		aimKey = input.KeyCode
-		waitingForBind = false
-		state.holding = false
-		bindButton.Text = "Bind da mira: " .. aimKey.Name
-		bindButton.BackgroundColor3 = inactive
-		updateTheme()
+	if UIS:GetFocusedTextBox() then return end
+	if waitingForBind then
+		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode ~= Enum.KeyCode.Unknown then
+			if input.KeyCode == Enum.KeyCode.Escape then
+				cancelBindCapture()
+			else
+				setAimKey(input.KeyCode)
+			end
+		end
 		return
 	end
 	if not processed and input.KeyCode == aimKey then state.holding = true end
 end)
 connect(UIS.WindowFocusReleased, function()
+	cancelBindCapture()
 	state.holding, dragInput = false, nil
 end)
 
@@ -294,7 +353,7 @@ RunService:BindToRenderStep(renderBinding, Enum.RenderPriority.Camera.Value + 1,
 
 	local activeModels = {}
 	local closestHead, closestDistance = nil, 250
-	local aiming = state.aim and (state.holding or state.mobileAim) and not UIS:GetFocusedTextBox()
+	local aiming = state.aim and not waitingForBind and (state.holding or state.mobileAim) and not UIS:GetFocusedTextBox()
 	local screenCenter = camera.ViewportSize / 2
 	local rayParams = RaycastParams.new()
 	rayParams.FilterType = Enum.RaycastFilterType.Exclude
