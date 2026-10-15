@@ -33,6 +33,7 @@ local connections, humanoids, visuals = {}, {}, {}
 local alive = true
 local state = {aim = false, mobileAim = false, chams = false, boxes = false, holding = false}
 local aimKey = Enum.KeyCode.E
+local aimSettings = {fov = 250, smooth = 0}
 local waitingForBind = false
 local accent = Color3.fromRGB(170, 85, 255)
 local inactive = Color3.fromRGB(39, 39, 49)
@@ -176,6 +177,55 @@ end
 
 createToggle(pages[1], "Aimbot (players + NPCs)", "aim")
 createToggle(pages[1], "Mira fixa (celular)", "mobileAim")
+
+local function createNumberSetting(label, key, minimum, maximum, step)
+	local row = make("Frame", {
+		Size = UDim2.new(1, 0, 0, 66),
+		BackgroundTransparency = 1,
+	}, pages[1])
+	make("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 24),
+		BackgroundTransparency = 1,
+		Text = label,
+		TextColor3 = Color3.fromRGB(245, 245, 250),
+		TextSize = 12,
+		Font = Enum.Font.Gotham,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, row)
+	local minus = createButton(row, "−")
+	minus.Position = UDim2.fromOffset(0, 26)
+	minus.Size = UDim2.fromOffset(38, 38)
+	local plus = createButton(row, "+")
+	plus.Position = UDim2.new(1, -38, 0, 26)
+	plus.Size = UDim2.fromOffset(38, 38)
+	local input = make("TextBox", {
+		Position = UDim2.fromOffset(44, 26),
+		Size = UDim2.new(1, -88, 0, 38),
+		BackgroundColor3 = inactive,
+		BorderSizePixel = 0,
+		Text = tostring(aimSettings[key]),
+		ClearTextOnFocus = false,
+		TextColor3 = Color3.fromRGB(245, 245, 250),
+		TextSize = 14,
+		Font = Enum.Font.Gotham,
+	}, row)
+	make("UICorner", {CornerRadius = UDim.new(0, 7)}, input)
+	local function apply(value)
+		if value and value == value and math.abs(value) < math.huge then
+			aimSettings[key] = math.round(math.clamp(value, minimum, maximum) * 100) / 100
+		end
+		input.Text = tostring(aimSettings[key])
+	end
+	connect(input.Focused, function() cancelBindCapture() end)
+	connect(input.FocusLost, function()
+		apply(tonumber((input.Text:gsub(",", "."))))
+	end)
+	connect(minus.Activated, function() apply(aimSettings[key] - step) end)
+	connect(plus.Activated, function() apply(aimSettings[key] + step) end)
+end
+
+createNumberSetting("FOV — raio em pixels (25 a 1000)", "fov", 25, 1000, 25)
+createNumberSetting("Smooth (0 a 1 s): 0 direto; maior = mais suave", "smooth", 0, 1, 0.05)
 make("TextLabel", {
 	Size = UDim2.new(1, 0, 0, 62),
 	BackgroundTransparency = 1,
@@ -368,13 +418,13 @@ local function drawBox(camera, model, box)
 end
 
 local renderBinding = "lsd_" .. HttpService:GenerateGUID(false)
-RunService:BindToRenderStep(renderBinding, Enum.RenderPriority.Camera.Value + 1, function()
+RunService:BindToRenderStep(renderBinding, Enum.RenderPriority.Camera.Value + 1, function(deltaTime)
 	if not alive then return end
 	local camera = workspace.CurrentCamera
 	if not camera then return end
 
 	local activeModels = {}
-	local closestHead, closestDistance = nil, 250
+	local closestHead, closestDistance = nil, aimSettings.fov
 	local aiming = state.aim and not waitingForBind and (state.holding or state.mobileAim) and not UIS:GetFocusedTextBox()
 	local screenCenter = camera.ViewportSize / 2
 	local rayParams = RaycastParams.new()
@@ -421,7 +471,11 @@ RunService:BindToRenderStep(renderBinding, Enum.RenderPriority.Camera.Value + 1,
 		end
 	end
 
-	if closestHead then camera.CFrame = CFrame.lookAt(camera.CFrame.Position, closestHead.Position) end
+	if closestHead then
+		local target = CFrame.lookAt(camera.CFrame.Position, closestHead.Position)
+		local alpha = aimSettings.smooth == 0 and 1 or (1 - math.exp(-deltaTime / aimSettings.smooth))
+		camera.CFrame = camera.CFrame:Lerp(target, alpha)
+	end
 end)
 
 local function stop()
